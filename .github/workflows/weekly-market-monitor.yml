@@ -1,0 +1,38 @@
+name: Weekly market events (KST)
+on:
+  schedule:
+    - cron: '0 11 * * 0' # Sunday 20:00 Asia/Seoul (UTC+9, no DST)
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: weekly-market-monitor
+  cancel-in-progress: false
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate next week's report
+        run: python scripts/weekly_market_monitor.py
+      - name: Commit report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: weekly market calendar"
+            git push
+          fi
+      - name: Publish GitHub issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REPORT="$(cat reports/latest.md)"
+          TITLE="주간 증시 일정 $(date -u +%Y-%m-%d)"
+          gh issue create --title "$TITLE" --body "$REPORT"
